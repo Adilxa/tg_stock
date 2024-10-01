@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 const botToken = "7718441618:AAEQ_e2NSf8LuMvfkn9twSYjnLSHlMVk7wk";
 const bot = new TelegramBot(botToken);
 
-// Моковые данные для валют и криптовалют
+// Моковые данные для валют, криптовалют и акций
 const currencies = {
   USD: 75.4,
   EUR: 89.7,
@@ -20,6 +20,33 @@ const cryptos = {
   BTC: 45000,
   ETH: 3500,
   XRP: 0.6,
+};
+
+const exchanges = {
+  USA: {
+    name: "США",
+    stocks: {
+      AAPL: 150,
+      TSLA: 700,
+      GOOGL: 2800,
+    },
+  },
+  GERMANY: {
+    name: "Германия",
+    stocks: {
+      DBK: 12,
+      SAP: 120,
+      BMW: 90,
+    },
+  },
+  RUSSIA: {
+    name: "Россия",
+    stocks: {
+      SBER: 300,
+      LKOH: 4500,
+      YNDX: 3000,
+    },
+  },
 };
 
 // Устанавливаем Webhook
@@ -36,13 +63,15 @@ bot.onText(/\/start/, msg => {
       inline_keyboard: [
         [{ text: "Валюта", callback_data: "currency" }],
         [{ text: "Криптовалюта", callback_data: "crypto" }],
+        [{ text: "Курс акций", callback_data: "stocks" }],
+        [{ text: "Биржи", callback_data: "exchanges" }],
         [{ text: "Калькулятор", callback_data: "calculator" }],
       ],
     },
   });
 });
 
-// Обработка выбора валют, криптовалют и калькулятора
+// Обработка выбора валют, криптовалют, акций и бирж
 bot.on("callback_query", callbackQuery => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
@@ -56,28 +85,61 @@ bot.on("callback_query", callbackQuery => {
   }
 
   if (callbackQuery.data === "crypto") {
-    let cryptoData = "Актуальные курсы криптовалют:\n";
-    for (let [key, value] of Object.entries(cryptos)) {
-      cryptoData += `${key}: $${value}\n`;
+    let cryptoData = "Выберите криптовалюту для расчета:\n";
+    for (let key of Object.keys(cryptos)) {
+      cryptoData += `${key}\n`;
     }
-    bot.sendMessage(chatId, cryptoData);
+    bot.sendMessage(chatId, cryptoData, {
+      reply_markup: {
+        inline_keyboard: Object.keys(cryptos).map(key => [
+          { text: key, callback_data: `calc_${key}` },
+        ]),
+      },
+    });
+  }
+
+  if (callbackQuery.data === "stocks") {
+    let stockData = "Актуальные курсы акций:\n";
+    for (let [key, value] of Object.entries(stocks)) {
+      stockData += `${key}: $${value}\n`;
+    }
+    bot.sendMessage(chatId, stockData);
+  }
+
+  if (callbackQuery.data === "exchanges") {
+    let exchangeData = "Выберите страну для просмотра бирж:\n";
+    bot.sendMessage(chatId, exchangeData, {
+      reply_markup: {
+        inline_keyboard: Object.keys(exchanges).map(key => [
+          { text: exchanges[key].name, callback_data: `stocks_${key}` },
+        ]),
+      },
+    });
+  }
+
+  // Обработка запроса акций для выбранной биржи
+  if (callbackQuery.data.startsWith("stocks_")) {
+    const countryKey = callbackQuery.data.split("_")[1];
+    let stockData = `Курсы акций на бирже в ${exchanges[countryKey].name}:\n`;
+    for (let [stock, price] of Object.entries(exchanges[countryKey].stocks)) {
+      stockData += `${stock}: $${price}\n`;
+    }
+    bot.sendMessage(chatId, stockData);
   }
 
   if (callbackQuery.data === "calculator") {
-    bot.sendMessage(chatId, "Выберите валюту или криптовалюту для пересчета:", {
+    bot.sendMessage(chatId, "Выберите валюту для пересчета:", {
       reply_markup: {
         inline_keyboard: [
           [{ text: "USD", callback_data: "calc_usd" }],
           [{ text: "EUR", callback_data: "calc_eur" }],
-          [{ text: "BTC", callback_data: "calc_btc" }],
-          [{ text: "ETH", callback_data: "calc_eth" }],
         ],
       },
     });
   }
 });
 
-// Обработка калькулятора
+// Обработка расчета для криптовалют
 bot.on("callback_query", callbackQuery => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
@@ -87,43 +149,66 @@ bot.on("callback_query", callbackQuery => {
     const isCurrency = currencies[selected] !== undefined;
     const isCrypto = cryptos[selected] !== undefined;
 
-    let rate, baseCurrency;
-    if (isCurrency) {
-      rate = currencies[selected];
-      baseCurrency = selected;
+    if (isCrypto) {
+      const rate = cryptos[selected];
       bot.sendMessage(
         chatId,
-        `Введите сумму в ${baseCurrency} для пересчета в BTC:`
-      );
-    } else if (isCrypto) {
-      rate = cryptos[selected];
-      baseCurrency = selected;
-      bot.sendMessage(
-        chatId,
-        `Введите сумму в ${baseCurrency} для пересчета в USD:`
+        `Введите сумму в ${selected} для пересчета в другую криптовалюту:`,
+        {
+          reply_markup: {
+            inline_keyboard: Object.keys(cryptos)
+              .filter(key => key !== selected)
+              .map(key => [
+                { text: key, callback_data: `convert_${selected}_${key}` },
+              ]),
+          },
+        }
       );
     }
 
-    bot.once("message", msg => {
-      const amount = parseFloat(msg.text);
-      if (!isNaN(amount)) {
-        if (isCurrency) {
-          const btcValue = (amount / rate) * cryptos.BTC;
-          bot.sendMessage(
-            chatId,
-            `Сумма ${amount} ${baseCurrency} = ${btcValue.toFixed(8)} BTC`
-          );
-        } else if (isCrypto) {
-          const usdValue = amount * rate;
-          bot.sendMessage(
-            chatId,
-            `Сумма ${amount} ${baseCurrency} = $${usdValue.toFixed(2)} USD`
-          );
+    if (isCurrency) {
+      const rate = currencies[selected];
+      bot.sendMessage(
+        chatId,
+        `Введите сумму в ${selected} для пересчета в другую валюту:`,
+        {
+          reply_markup: {
+            inline_keyboard: Object.keys(currencies)
+              .filter(key => key !== selected)
+              .map(key => [
+                { text: key, callback_data: `convert_${selected}_${key}` },
+              ]),
+          },
         }
-      } else {
-        bot.sendMessage(chatId, "Пожалуйста, введите корректную сумму.");
+      );
+    }
+  }
+
+  // Обработка конверсии
+  if (callbackQuery.data.startsWith("convert_")) {
+    const [, from, to] = callbackQuery.data.split("_");
+    const amount = parseFloat(callbackQuery.message.text);
+
+    if (!isNaN(amount)) {
+      let conversionRate;
+      if (currencies[from] && currencies[to]) {
+        conversionRate = currencies[to] / currencies[from];
+      } else if (cryptos[from] && cryptos[to]) {
+        conversionRate = cryptos[to] / cryptos[from];
       }
-    });
+
+      if (conversionRate) {
+        const convertedAmount = amount * conversionRate;
+        bot.sendMessage(
+          chatId,
+          `Сумма ${amount} ${from} = ${convertedAmount.toFixed(2)} ${to}`
+        );
+      } else {
+        bot.sendMessage(chatId, "Ошибка в конвертации.");
+      }
+    } else {
+      bot.sendMessage(chatId, "Пожалуйста, введите корректную сумму.");
+    }
   }
 });
 
