@@ -22,31 +22,10 @@ const cryptos = {
   XRP: 0.6,
 };
 
-const exchanges = {
-  USA: {
-    name: "США",
-    stocks: {
-      AAPL: 150,
-      TSLA: 700,
-      GOOGL: 2800,
-    },
-  },
-  GERMANY: {
-    name: "Германия",
-    stocks: {
-      DBK: 12,
-      SAP: 120,
-      BMW: 90,
-    },
-  },
-  RUSSIA: {
-    name: "Россия",
-    stocks: {
-      SBER: 300,
-      LKOH: 4500,
-      YNDX: 3000,
-    },
-  },
+const stocks = {
+  AAPL: 150,
+  TSLA: 700,
+  GOOGL: 2800,
 };
 
 // Устанавливаем Webhook
@@ -64,14 +43,13 @@ bot.onText(/\/start/, msg => {
         [{ text: "Валюта", callback_data: "currency" }],
         [{ text: "Криптовалюта", callback_data: "crypto" }],
         [{ text: "Курс акций", callback_data: "stocks" }],
-        [{ text: "Биржи", callback_data: "exchanges" }],
         [{ text: "Калькулятор", callback_data: "calculator" }],
       ],
     },
   });
 });
 
-// Обработка выбора валют, криптовалют, акций и бирж
+// Обработка выбора валют, криптовалют и калькулятора
 bot.on("callback_query", callbackQuery => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
@@ -102,27 +80,6 @@ bot.on("callback_query", callbackQuery => {
     let stockData = "Актуальные курсы акций:\n";
     for (let [key, value] of Object.entries(stocks)) {
       stockData += `${key}: $${value}\n`;
-    }
-    bot.sendMessage(chatId, stockData);
-  }
-
-  if (callbackQuery.data === "exchanges") {
-    let exchangeData = "Выберите страну для просмотра бирж:\n";
-    bot.sendMessage(chatId, exchangeData, {
-      reply_markup: {
-        inline_keyboard: Object.keys(exchanges).map(key => [
-          { text: exchanges[key].name, callback_data: `stocks_${key}` },
-        ]),
-      },
-    });
-  }
-
-  // Обработка запроса акций для выбранной биржи
-  if (callbackQuery.data.startsWith("stocks_")) {
-    const countryKey = callbackQuery.data.split("_")[1];
-    let stockData = `Курсы акций на бирже в ${exchanges[countryKey].name}:\n`;
-    for (let [stock, price] of Object.entries(exchanges[countryKey].stocks)) {
-      stockData += `${stock}: $${price}\n`;
     }
     bot.sendMessage(chatId, stockData);
   }
