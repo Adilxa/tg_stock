@@ -64,11 +64,13 @@ bot.on("callback_query", callbackQuery => {
   }
 
   if (callbackQuery.data === "calculator") {
-    bot.sendMessage(chatId, "Выберите валюту для пересчета:", {
+    bot.sendMessage(chatId, "Выберите валюту или криптовалюту для пересчета:", {
       reply_markup: {
         inline_keyboard: [
           [{ text: "USD", callback_data: "calc_usd" }],
           [{ text: "EUR", callback_data: "calc_eur" }],
+          [{ text: "BTC", callback_data: "calc_btc" }],
+          [{ text: "ETH", callback_data: "calc_eth" }],
         ],
       },
     });
@@ -81,21 +83,43 @@ bot.on("callback_query", callbackQuery => {
   const chatId = message.chat.id;
 
   if (callbackQuery.data.startsWith("calc_")) {
-    const currencyCode = callbackQuery.data.split("_")[1].toUpperCase();
-    const currencyRate = currencies[currencyCode];
+    const selected = callbackQuery.data.split("_")[1].toUpperCase();
+    const isCurrency = currencies[selected] !== undefined;
+    const isCrypto = cryptos[selected] !== undefined;
 
-    bot.sendMessage(
-      chatId,
-      `Введите сумму в ${currencyCode} для пересчета в BTC:`
-    );
+    let rate, baseCurrency;
+    if (isCurrency) {
+      rate = currencies[selected];
+      baseCurrency = selected;
+      bot.sendMessage(
+        chatId,
+        `Введите сумму в ${baseCurrency} для пересчета в BTC:`
+      );
+    } else if (isCrypto) {
+      rate = cryptos[selected];
+      baseCurrency = selected;
+      bot.sendMessage(
+        chatId,
+        `Введите сумму в ${baseCurrency} для пересчета в USD:`
+      );
+    }
+
     bot.once("message", msg => {
       const amount = parseFloat(msg.text);
       if (!isNaN(amount)) {
-        const btcValue = (amount / currencyRate) * cryptos.BTC;
-        bot.sendMessage(
-          chatId,
-          `Сумма ${amount} ${currencyCode} = ${btcValue.toFixed(8)} BTC`
-        );
+        if (isCurrency) {
+          const btcValue = (amount / rate) * cryptos.BTC;
+          bot.sendMessage(
+            chatId,
+            `Сумма ${amount} ${baseCurrency} = ${btcValue.toFixed(8)} BTC`
+          );
+        } else if (isCrypto) {
+          const usdValue = amount * rate;
+          bot.sendMessage(
+            chatId,
+            `Сумма ${amount} ${baseCurrency} = $${usdValue.toFixed(2)} USD`
+          );
+        }
       } else {
         bot.sendMessage(chatId, "Пожалуйста, введите корректную сумму.");
       }
